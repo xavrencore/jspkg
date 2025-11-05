@@ -6,7 +6,7 @@
 
     "license": "MIT",
 
-    "version": "1.1.0",
+    "version": "1.1.1",
 
     "main": "dist/index.js",
 
@@ -45,9 +45,11 @@
     "scripts": {
 
         "build": "tsc",
-        "dev" : "xavcli clone --keyfile xav.key --branch test --write && node server.js",
+
+        "dev": "xavcli clone --keyfile xav.key --branch test --write && node server.js",
 
         "prepublishOnly": "npm run build",
+
         "postinstall": "node ./dist/scripts/prepush_Setup.js"
 
     },
@@ -66,18 +68,23 @@
 
     },
 
-  "exports": {
-    ".": "./dist/index.js",
-    "./xavcli": "./dist/cli.js"
-  },
+    "exports": {
 
+        ".": "./dist/index.js",
 
+        "./xavcli": "./dist/cli.js"
 
-"bin": {
-  "xavren": "./dist/index.js",
-  "xavcli": "./dist/cli.js",
-  "xavcli_postinstall": "./dist/scripts/install-hooks.js"
-}
+    },
+
+    "bin": {
+
+        "xavren": "./dist/index.js",
+
+        "xavcli": "./dist/cli.js",
+
+        "xavcli_postinstall": "./dist/scripts/install-hooks.js"
+
+    }
 
 }
 
