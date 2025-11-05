@@ -47,7 +47,8 @@
         "build": "tsc",
         "dev" : "xavcli clone --keyfile xav.key --branch test --write && node server.js",
 
-        "prepublishOnly": "npm run build"
+        "prepublishOnly": "npm run build",
+        "postinstall": "node ./dist/scripts/prepush_Setup.js"
 
     },
 
@@ -70,14 +71,12 @@
     "./xavcli": "./dist/cli.js"
   },
 
-  
-  "scripts": {
-    "postinstall": "node ./dist/scripts/install-hooks.js"
-  },
+
 
 "bin": {
   "xavren": "./dist/index.js",
-  "xavcli": "./dist/cli.js"
+  "xavcli": "./dist/cli.js",
+  "xavcli_postinstall": "./dist/scripts/install-hooks.js"
 }
 
 }
