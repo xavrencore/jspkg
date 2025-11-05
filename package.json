@@ -1,0 +1,84 @@
+{
+
+    "name": "xavren",
+
+    "author": "princewill",
+
+    "license": "MIT",
+
+    "version": "1.1.0",
+
+    "main": "dist/index.js",
+
+    "types": "dist/index.d.ts",
+
+    "keywords": [
+
+        "env",
+
+        "vault",
+
+        "xavren"
+
+    ],
+
+    "dependencies": {
+
+        "axios": "^1.12.2",
+
+        "chokidar": "^4.0.3",
+
+        "commander": "^14.0.2",
+
+        "dotenv": "^17.2.2",
+
+        "lodash": "^4.17.21",
+
+        "moment": "^2.30.1",
+
+        "socket.io-client": "^4.8.1",
+
+        "zustand": "^5.0.8"
+
+    },
+
+    "scripts": {
+
+        "build": "tsc",
+        "dev" : "xavcli clone --keyfile xav.key --branch test --write && node server.js",
+
+        "prepublishOnly": "npm run build"
+
+    },
+
+    "files": [
+
+        "dist"
+
+    ],
+
+    "devDependencies": {
+
+        "@types/node": "^24.5.2",
+
+        "typescript": "^5.9.2"
+
+    },
+
+  "exports": {
+    ".": "./dist/index.js",
+    "./xavcli": "./dist/cli.js"
+  },
+
+  
+  "scripts": {
+    "postinstall": "node ./dist/scripts/install-hooks.js"
+  },
+
+"bin": {
+  "xavren": "./dist/index.js",
+  "xavcli": "./dist/cli.js"
+}
+
+}
+
