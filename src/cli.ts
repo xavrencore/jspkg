@@ -168,7 +168,7 @@ program
       }
       console.log("getting envs")
 
-    // --- Step 5: Fetch environments ---
+    // --- Step 5: Fetch environments ----
     await getEnvs({ project, write: !!write });
 
     console.log('\n✅ Clone operation complete!');
