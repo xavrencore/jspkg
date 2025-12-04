@@ -1,5 +1,5 @@
 
-export const production =false
+export const production =true
 export const DOMAIN = production?"https://xavren-server.onrender.com":"http://172.20.10.3:5002";
 // export const DOMAIN = "http://172.20.10.2:5002";
 export const DOMAINAPI = DOMAIN +"/api";
