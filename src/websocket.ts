@@ -100,7 +100,7 @@ export class SocketClient {
     this.socket.on("envupdated", async (msg) => {
       setTimeout(async () => {
         upgradeVersion({ force: true });
-        console.log("envupdated:", msg);
+        // console.log("envupdated:", msg);
         let config = sessionStore.getState().config;
         let envs = await getchangeEnv(JSON.parse(msg));
 
@@ -113,8 +113,8 @@ export class SocketClient {
 
         updateProcessEnv(envs.changes);
 
-        console.log("✅ Env updated from cloud:", envs.changes);
-        console.log("✅ envs.list", envs.list);
+        // console.log("✅ Env updated from cloud:", envs.changes);
+        // console.log("✅ envs.list", envs.list);
         if (envs.changes.length > 0) {
           await writeEnvFile(envs.list, config.envfile);
         }
