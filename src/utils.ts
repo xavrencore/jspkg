@@ -672,6 +672,46 @@ export interface EnvItem {
 //   return merged;
 // }
 
+export let getKey = (options)=>{
+  loadenv({branch:options?.branch,env:options?.env})
+    const defaultKeyFile = path.resolve("./keyfile.txt");
+        const keyFilePath = options.keyfile
+          ? path.resolve(options.keyfile)
+          : defaultKeyFile;
+
+        let key: string;
+        let omit_ = options.omit.split(",");
+
+        // --- Step 1: Check keyfile ---
+        if (fs.existsSync(keyFilePath)) {
+          try {
+            key = fs.readFileSync(keyFilePath, "utf8").trim();
+            console.log(`📁 Loaded key from ${keyFilePath}`);
+          } catch (err: any) {
+            console.error("❌ Failed to read keyfile:", err.message);
+            process.exit(1);
+          }
+        }
+        // --- Step 2: Fallback to --key ---
+        else if (options.key) {
+          key = options.key;
+          console.log("🔑 Using provided --key value");
+        } else if (options.keyenv) {
+          omit_.push(options.keyenv);
+
+          key = process.env[options.keyenv];
+        }
+        // --- Step 3: No key found ---
+        else {
+          console.error("❌ Error: No keyfile found and no --key provided.");
+          process.exit(1);
+        }
+
+        return {key,omit_}
+
+}
+
+
 function customEnvUnique(c = [], envs = []) {
   const merged = [];
   const seenIds = new Set();

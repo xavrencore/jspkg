@@ -6,6 +6,7 @@ import path from "path";
 import {
   ACTIONS,
   getEnvs,
+  getKey,
   initialize,
   listToEnvString,
   mount,
@@ -16,6 +17,7 @@ import { XavrenParser } from "./parser";
 
 (() => {
   try {
+    
     // dotenv.config()
     // console.log(process.env["-dddddd"],"kddddddsss")
 
@@ -42,44 +44,13 @@ import { XavrenParser } from "./parser";
       .option("--commitId <commitId>", "Specify commit id to clone (optional)")
       .option("--omit <omit>", "Specify env file name", "")
       .action(async (options) => {
-        const defaultKeyFile = path.resolve("./keyfile.txt");
-        const keyFilePath = options.keyfile
-          ? path.resolve(options.keyfile)
-          : defaultKeyFile;
 
-        let key: string;
-
-        let omit_ = options.omit.split(",");
-
-        // --- Step 1: Check keyfile ---
-        if (fs.existsSync(keyFilePath)) {
-          try {
-            key = fs.readFileSync(keyFilePath, "utf8").trim();
-            console.log(`📁 Loaded key from ${keyFilePath}`);
-          } catch (err: any) {
-            console.error("❌ Failed to read keyfile:", err.message);
-            process.exit(1);
-          }
-        }
-        // --- Step 2: Fallback to --key ---
-        else if (options.key) {
-          key = options.key;
-          console.log("🔑 Using provided --key value");
-        } else if (options.keyenv) {
-          omit_.push(options.keyenv);
-
-          key = process.env[options.keyenv];
-        }
-        // --- Step 3: No key found ---
-        else {
-          console.error("❌ Error: No keyfile found and no --key provided.");
-          process.exit(1);
-        }
+      
 
         console.log("✅ Clone operation started...");
 
-        console.log(options?.commitId);
-
+     
+let{key,omit_} = getKey(options)
         // --- Step 4: Initialize environment ---
         const {
           write,
@@ -129,40 +100,42 @@ import { XavrenParser } from "./parser";
       .option("--commitId <commitId>", "Specify commit id to clone (optional)")
       .option("--omit <omit>", "Specify env file name", "")
       .action(async (options) => {
-        const defaultKeyFile = path.resolve("./keyfile.txt");
-        const keyFilePath = options.keyfile
-          ? path.resolve(options.keyfile)
-          : defaultKeyFile;
+        // const defaultKeyFile = path.resolve("./keyfile.txt");
+        // const keyFilePath = options.keyfile
+        //   ? path.resolve(options.keyfile)
+        //   : defaultKeyFile;
 
-        let key: string;
+        // let key: string;
 
-        // let omit_ = []
-        let omit_ = options.omit.split(",");
+        // // let omit_ = []
+        // let omit_ = options.omit.split(",");
 
-        // --- Step 1: Check keyfile ---
-        if (fs.existsSync(keyFilePath)) {
-          try {
-            key = fs.readFileSync(keyFilePath, "utf8").trim();
-            console.log(`📁 Loaded key from ${keyFilePath}`);
-          } catch (err: any) {
-            console.error("❌ Failed to read keyfile:", err.message);
-            process.exit(1);
-          }
-        }
-        // --- Step 2: Fallback to --key ---
-        else if (options.key) {
-          key = options.key;
-          console.log("🔑 Using provided --key value");
-        } else if (options.keyenv) {
-          omit_.push(options.keyenv);
+        // // --- Step 1: Check keyfile ---
+        // if (fs.existsSync(keyFilePath)) {
+        //   try {
+        //     key = fs.readFileSync(keyFilePath, "utf8").trim();
+        //     console.log(`📁 Loaded key from ${keyFilePath}`);
+        //   } catch (err: any) {
+        //     console.error("❌ Failed to read keyfile:", err.message);
+        //     process.exit(1);
+        //   }
+        // }
+        // // --- Step 2: Fallback to --key ---
+        // else if (options.key) {
+        //   key = options.key;
+        //   console.log("🔑 Using provided --key value");
+        // } else if (options.keyenv) {
+        //   omit_.push(options.keyenv);
 
-          key = process.env[options.keyenv];
-        }
-        // --- Step 3: No key found ---
-        else {
-          console.error("❌ Error: No keyfile found and no --key provided.");
-          process.exit(1);
-        }
+        //   key = process.env[options.keyenv];
+        // }
+        // // --- Step 3: No key found ---
+        // else {
+        //   console.error("❌ Error: No keyfile found and no --key provided.");
+        //   process.exit(1);
+        // }
+
+        let{key,omit_} = getKey(options)
 
         console.log(
           "✅ Push operation started...",
