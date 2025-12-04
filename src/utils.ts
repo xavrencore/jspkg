@@ -1,7 +1,14 @@
 import moment from "moment";
 import _ from "lodash";
-import { decryptMessageFromKeyPair, handleDecrypt, handleDecryptEnv, handleDecryptKeyPairLongData, handleEncrypt, handleEncryptEnv } from "./cryption";
-
+import {
+  decryptMessageFromKeyPair,
+  handleDecrypt,
+  handleDecryptEnv,
+  handleDecryptKeyPairLongData,
+  handleEncrypt,
+  handleEncryptEnv,
+} from "./cryption";
+import crypto from "crypto";
 export const getreadabledate = (date: string) => {
   return moment(date).fromNow();
 };
@@ -9,8 +16,6 @@ export const getreadabledate = (date: string) => {
 export function parseEnvToList(
   envContent: string
 ): { title: string; value: string }[] {
-
-
   return _.uniqBy(
     envContent
       .split("\n")
@@ -69,7 +74,15 @@ export function listToEnvString(list: any[]): string {
   return cleanEnvString(raw);
 }
 
-export const getProjectById = async ({id,versioncontrol=true,task}:{id:string,versioncontrol?:boolean,task?:string}) => {
+export const getProjectById = async ({
+  id,
+  versioncontrol = true,
+  task,
+}: {
+  id: string;
+  versioncontrol?: boolean;
+  task?: string;
+}) => {
   try {
     let secretPhrase = sessionStore.getState();
     if (!secretPhrase) {
@@ -78,15 +91,12 @@ export const getProjectById = async ({id,versioncontrol=true,task}:{id:string,ve
 
     let data = await httpRequest({ url: GETPROJECTBYIDURL + `?id=${id}` });
     if (data.success) {
-
-
-if(versioncontrol){
-
-  let d:any =  await   upgradeVersion({colab:data.data})
-  if(d?.success){
-data = d
-  }
-}
+      if (versioncontrol) {
+        let d: any = await upgradeVersion({ colab: data.data });
+        if (d?.success) {
+          data = d;
+        }
+      }
     } else {
     }
     return data;
@@ -97,31 +107,37 @@ data = d
 };
 
 export const mount = async ({
-  path,
   secretPhrase,
-  key,
+
   sync,
   project,
-  fetchproject,
 }) => {
+  // const content = fs.readFileSync(path, "utf8");
 
-  const content = fs.readFileSync(path, "utf8");
-
-  await onChange({ content, secretPhrase, key, sync, project, fetchproject });
+  await onChange({ secretPhrase, sync, project });
 };
 export const onChange = async ({
-  content,
   secretPhrase,
-  key,
+
   sync,
   project,
-  fetchproject,
 }) => {
-  let c = parseAndUniqueEnv(content);
-  // await getEnvs({ project: project, key: fetchproject.data,write:false });
-  await addEnv({  secretPhrase, sync, body: c, project });
-};
+  let c = [];
 
+  // if(content){
+  // parseAndUniqueEnv(content)
+  // }else{
+  let branch = sessionStore.getState().config.branch;
+  let env = sessionStore.getState().config.envfile;
+  const parser = new XavrenParser();
+  parser.load(env);
+  let data = parser.get({ branch, standalone: true });
+  c = objectToList(data);
+
+  // }
+  // await getEnvs({ project: project, key: fetchproject.data,write:false });
+  await addEnv({ secretPhrase, sync, body: c, project });
+};
 
 // let    addEnvHelper = async()=>{
 
@@ -141,16 +157,15 @@ export const addEnv = async ({
   sync?: boolean;
 }) => {
   try {
+    key = key || sessionStore.getState().project.colab.key;
+    secretPhrase = secretPhrase || sessionStore.getState().secretPhrase;
+    let commitId = sessionStore.getState().config.commitId;
+    let commit = sessionStore.getState().config.commit;
 
-key = key ||  sessionStore.getState().project.colab.key
-secretPhrase = secretPhrase ||  sessionStore.getState().secretPhrase
-let commitId =   sessionStore.getState().config.commitId
-let commit =   sessionStore.getState().config.commit
+    // console.log(key)
 
-// console.log(key)
-
-      await getEnvs({ project: project, key: key,write:false });
-    let branch  = sessionStore.getState().config.branch||"main"
+    // await getEnvs({ project: project, key: key,write:false });
+    let branch = sessionStore.getState().config.branch || "main";
     let envs = envStore.getState().envs;
 
     if (!secretPhrase) {
@@ -161,17 +176,18 @@ let commit =   sessionStore.getState().config.commit
       encrypted: key,
       passphrase: secretPhrase,
     })) as string;
- 
+
     if (!deHashedKey) {
       return;
     }
-
-      let omit:string[] = sessionStore.getState().config.omit||[]
-     const loader = new TerminalLoader("encrypting envs", 50);
-     const step = 50/body.length
+      let config = sessionStore.getState().config;
+ let parser = new XavrenParser();
+    let omit: string[] = sessionStore.getState().config.omit || [];
+    const loader = new TerminalLoader("encrypting envs", 50);
+    const step = 50 / body.length;
     const hashedData_: any = await Promise.all(
-      body.map(async (item) => {
-        loader.tick(step)
+      body.filter(e=>{return !parser.lockExist(e.title,e.value,config.envfile)}).map(async (item) => {
+        loader.tick(step);
         const encryptedKey = handleEncryptEnv({
           data: item,
           passphrase: deHashedKey,
@@ -179,57 +195,83 @@ let commit =   sessionStore.getState().config.commit
 
         let v = envs.find((e) => e.title == item.title);
 
-
         return {
           ...encryptedKey,
-          changed: (v?._id) ? (v?.value != item?.value):(true),
+          changed: v?._id ? v?.value != item?.value : true,
           item: { ...item, ...(v?._id ? { _id: v?._id } : {}) },
           ...(v?._id ? { _id: v?._id } : {}),
         };
       })
     );
 
-  const  hashedData = hashedData_.filter((item) => !omit.includes(item.item.title))
+    const hashedData = hashedData_.filter(
+      (item) => !omit.includes(item.item.title)
+    );
 
+    // return
     envStore
       .getState()
       .setEnvs(
         _.uniqBy(
           [
-            ...hashedData_.filter((e) => e.item).map((e) => ({...e.item,dItem:e.item,eItem:e })),
+            ...hashedData_
+              .filter((e) => e.item)
+              .map((e) => ({ ...e.item, dItem: e.item, eItem: e })),
             ...(envs || []),
           ],
           "title"
         )
       );
-      let config = sessionStore.getState().config
-      
-if(!config.updateCloud){
-  return
-}
+  
 
+    if (!config.updateCloud) {
+      return;
+    }
 
-let httpdata = hashedData.filter((e:any)=>e.changed).map((e:any) => _.omit(e, ["item"]))
+    let httpdata = hashedData
+      .filter((e: any) => e.changed  )
+      .map((e: any) => _.omit(e, ["item"]));
 
-    let data = httpdata.length>0?  await httpRequest({
-      url: (sync ? UPDATEENVURL : ADDENVURL) + `?id=${project}`,
-      method: "PUT",
-      body: {data:httpdata,branch,commitId,commit},
-    }):{};
+    let data =
+      httpdata.length > 0
+        ? await httpRequest({
+            url: (sync ? UPDATEENVURL : ADDENVURL) + `?id=${project}`,
+            method: "PUT",
+            body: { data: httpdata, branch, commitId, commit },
+          })
+        : {};
 
     if (data?.success) {
+
+
+      // let parser = new XavrenParser();
+
+      parser.updateXavLock(listToObject(hashedData
+      .filter((e: any) => e.changed)
+      .map((e: any) => e.item)),config.envfile)
+      // parser.load(config.envfile);
+      // let xavlock = parser.get({ branch: "xavlock", standalone: false });
+      // xavlock.
+
+
+
+
       let v = data?.data || [];
       const decripted = await Promise.all(
         v.map(async (item) => {
           let c = handleDecryptEnv(item, deHashedKey);
 
-          return { ...item, ...c ,dItem:c,eItem:item };
+          return { ...item, ...c, dItem: c, eItem: item };
         })
       );
-  let envs_ = envStore.getState().envs;
+      let envs_ = envStore.getState().envs;
       envStore
         .getState()
         .setEnvs(_.uniqBy([...decripted, ...(envs_ || [])], "title"));
+
+
+
+
       return {
         data: hashedData.map((e) => {
           let c = v.find((ee) => ee.title == e.title);
@@ -241,59 +283,54 @@ let httpdata = hashedData.filter((e:any)=>e.changed).map((e:any) => _.omit(e, ["
       };
     } else {
     }
-
-
   } catch (e: any) {
-
-    
     throw e;
   } finally {
   }
 };
 
+export const mergeEnvToFile = (envdata) => {
+  let projectId = sessionStore.getState().projectId;
 
-export const mergeEnvToFile = (envdata)=>{
+  let envs = envStore.getState().envs;
+  let omit = sessionStore.getState().config.omit;
 
-        let projectId = sessionStore.getState().projectId;
-      
-        let envs = envStore.getState().envs
-        let omit = sessionStore.getState().config.omit
+  let v = [];
+  if (projectId == process.env.envProjectId) {
+    v = _.uniqBy([...envdata, ...(envs || [])], "title");
+  } else {
+    v = _.uniqBy(
+      [
+        ...envdata,
+        ...(envs || []).filter((e) => {
+          return omit.includes(e.title);
+        }),
+      ],
+      "title"
+    );
+  }
 
-      let v = []
-if(projectId==process.env.envProjectId){
-
-   v= _.uniqBy([...envdata, ...(envs||[])], "title")
-}else{
-   v= _.uniqBy([...envdata, ...(envs||[]).filter((e)=>{
-    return omit.includes(e.title)
-  })], "title")
-
-}
-
-return v
-}
+  return v;
+};
 export const getEnvs = async ({
   project,
   key,
-  write=true,
+  write = true,
 }: {
   project: string;
   key?: string;
-  write?:boolean
+  write?: boolean;
 }) => {
-
-key = key ||  sessionStore.getState().project.colab.key
-      let branch  = sessionStore.getState().config.branch||"main"
+  key = key || sessionStore.getState().project.colab.key;
+  let branch = sessionStore.getState().config.branch || "main";
   const secretPhrase = sessionStore.getState().secretPhrase;
   const config = sessionStore.getState().config;
-  let commitId =   sessionStore.getState().config.commitId
-let commit =   sessionStore.getState().config.commit
+  let commitId = sessionStore.getState().config.commitId;
+  let commit = sessionStore.getState().config.commit;
   try {
     if (!secretPhrase) {
       return;
     }
-
-   
 
     let deHashedKey = (await handleDecrypt({
       encrypted: key,
@@ -303,32 +340,38 @@ let commit =   sessionStore.getState().config.commit
       return;
     }
 
-    let data = await httpRequest({ url: FETCHENVURL + `?id=${project}&branch=${branch||"main"}&commitId=${commitId}`});
-   const omit = sessionStore.getState().config.omit ||[];
+
+    let data = await httpRequest({
+      url:
+        FETCHENVURL +
+        `?id=${project}&branch=${branch || "main"}&commitId=${commitId}`,
+    });
+
+    const omit = sessionStore.getState().config.omit || [];
     if (data.success) {
       const loader = new TerminalLoader("Decrypting env", 50);
-      const step =   50/ data.data.length
-      let envs_ = envStore.getState().envs
+      const step = 50 / data.data.length;
+      let envs_ = envStore.getState().envs;
       const decripted_ = await Promise.all(
         data.data.map(async (item) => {
           let c = handleDecryptEnv(item, deHashedKey);
-          // console.log("dddddddddd",step)
+
           loader.tick(step);
-    const existing = envs_.find((e) => e.title === c.title);
-    let obj = { ...item, ...c,dItem:c,eItem:item   }
-       if(existing){
-          obj.pItem = existing
-         }
+          const existing = envs_.find((e) => e.title === c.title);
+          let obj = { ...item, ...c, dItem: c, eItem: item };
+          if (existing) {
+            obj.pItem = existing;
+          }
           return obj;
         })
-      )
-         const decripted =  decripted_ .filter((item) => !omit.includes(item.title));
+      );
+      const decripted = decripted_.filter((item) => !omit.includes(item.title));
 
-         let envs = envStore.getState().envs
-         
-         let v = mergeEnvToFile(decripted)
-         updateProcessEnv(decripted);
-      if(write){
+      let envs = envStore.getState().envs;
+
+      let v = mergeEnvToFile(decripted);
+      updateProcessEnv(decripted);
+      if (write) {
         await writeEnvFile(v, config.envfile);
       }
 
@@ -336,11 +379,10 @@ let commit =   sessionStore.getState().config.commit
       envStore.getState().setEnvs(v);
       return { decripted };
     } else {
-
-      return null
+      return null;
     }
   } catch (e: any) {
-    console.log(e)
+    console.log(e);
   } finally {
   }
 };
@@ -365,62 +407,66 @@ function sleep(ms: number) {
 // export getsignedkey()=>{
 
 // }
-export enum ACTIONS{
-  KILL="KILL"
+export enum ACTIONS {
+  KILL = "KILL",
 }
 export const loginWithPhrase = async ({
-  phrase,task,colabId
-}:
-{  phrase: string,
-  task?:string
+  phrase,
+  task,
+  colabId,
+}: {
+  phrase: string;
+  task?: string;
   // email: string,
-  colabId?:string}
-): Promise<any> => {
+  colabId?: string;
+}): Promise<any> => {
   try {
-
-  let logginin  = sessionStore.getState().logginin
-  if(logginin){
-    await sleep(5000);
-    return   await loginWithPhrase({phrase, colabId});
-  }
-  let authKey  = sessionStore.getState().authKey
-  let token  = sessionStore.getState().token
-    if(authKey && token){
-      return
-
+    let logginin = sessionStore.getState().logginin;
+    if (logginin) {
+      await sleep(5000);
+      return await loginWithPhrase({ phrase, colabId });
     }
-  sessionStore.getState().setLogginIn(true)
+    let authKey = sessionStore.getState().authKey;
+    let token = sessionStore.getState().token;
+    if (authKey && token) {
+      return;
+    }
+    sessionStore.getState().setLogginIn(true);
 
-     let keydata =  await httpRequest({url:GETSIGNEDKEYURL,login:false,   method: "POST",
-      body: { colabId },})
+    let keydata = await httpRequest({
+      url: GETSIGNEDKEYURL,
+      login: false,
+      method: "POST",
+      body: { colabId },
+    });
 
+    let decryptedkeydata;
 
-  let decryptedkeydata ;
-
-  if(keydata.success)
-  {
-
-    if(task=="clone"){
-      if(process.env.envVersion==keydata.data.colab.project.envVersion &&process.env.envProjectId==keydata.data.colab.project._id){
-        return {action:ACTIONS.KILL,message:"everything up to date"}
+    if (keydata.success) {
+      if (task == "clone") {
+        if (
+          process.env.envVersion == keydata.data.colab.project.envVersion &&
+          process.env.envProjectId == keydata.data.colab.project._id
+        ) {
+          return { action: ACTIONS.KILL, message: "everything up to date" };
+        }
       }
+      //   let secretKey  =  await handleDecrypt({encrypted:{...keydata?.data?.user,encrypted:keydata?.data?.user?.privateKey},passphrase:phrase})
+      //  decryptedkeydata = await decryptMessageFromKeyPair({encrypted:keydata?.data.signedData,privateKey:secretKey})
+      let secretKey = await handleDecrypt({
+        encrypted: keydata.data.colab.privateKey,
+        passphrase: phrase,
+      });
+
+      decryptedkeydata = await decryptMessageFromKeyPair({
+        encrypted: keydata?.data.signedData,
+        privateKey: secretKey,
+      });
+    } else {
+      await sleep(3000);
+      return await loginWithPhrase({ phrase, colabId });
+      // toast.error(keydata?.message||"An error occured")
     }
-    //   let secretKey  =  await handleDecrypt({encrypted:{...keydata?.data?.user,encrypted:keydata?.data?.user?.privateKey},passphrase:phrase})
-    //  decryptedkeydata = await decryptMessageFromKeyPair({encrypted:keydata?.data.signedData,privateKey:secretKey})
-    let secretKey  =  await handleDecrypt({encrypted:keydata.data.colab.privateKey,passphrase:phrase})
-    
-    decryptedkeydata = await decryptMessageFromKeyPair({encrypted:keydata?.data.signedData,privateKey:secretKey})
-   
-  }
-
-
-  else{
-       await sleep(3000);
-   return   await loginWithPhrase({phrase, colabId});
-    // toast.error(keydata?.message||"An error occured")
-     
-    
-  }
     let req = await httpRequest({
       url: LOGINWITHPHRASE,
       login: false,
@@ -429,33 +475,31 @@ export const loginWithPhrase = async ({
     });
 
     if (req.success) {
-        sessionStore.getState().setLogginIn(false)
-      sessionStore.getState().login(req.data.user, req.data.token,req.data.authKey);
-      setTimeout(()=>{
-        sessionStore.getState().setAuthKey(null)
+      sessionStore.getState().setLogginIn(false);
+      sessionStore
+        .getState()
+        .login(req.data.user, req.data.token, req.data.authKey);
+      setTimeout(() => {
+        sessionStore.getState().setAuthKey(null);
 
-      // loginWithPhrase(phrase, email);
+        // loginWithPhrase(phrase, email);
+      }, 1000 * 50);
 
-      },1000*50)
+      let savedProject = sessionStore.getState().project;
 
-      let savedProject =   sessionStore.getState().project
-
-if(savedProject){
-
-  upgradeVersion({force:true})
-}
+      if (savedProject) {
+        upgradeVersion({ force: true });
+      }
     } else {
       console.warn("Login failed, retrying in 3s...");
       await sleep(3000);
-   return   await loginWithPhrase({phrase, colabId});
-      
-       
+      return await loginWithPhrase({ phrase, colabId });
     }
   } catch (e) {
     console.error("Error in loginWithPhrase:", e);
     console.warn("Retrying in 3s...");
     await sleep(3000);
-  return  await loginWithPhrase({phrase, colabId});
+    return await loginWithPhrase({ phrase, colabId });
   }
 };
 
@@ -476,15 +520,13 @@ export async function httpRequest<T = any>(data_: {
   let token = sessionStore.getState().token;
   let authKey = sessionStore.getState().authKey;
 
- 
-
   // If login required but no token → try re-login
   if ((!token || !authKey) && login) {
     const phrase = sessionStore.getState().secretPhrase;
     const email = sessionStore.getState().email;
     const colabId = sessionStore.getState().colabId;
     if (phrase) {
-      let data = await loginWithPhrase({phrase, colabId});
+      let data = await loginWithPhrase({ phrase, colabId });
       token = sessionStore.getState().token; // refresh token after login
     }
 
@@ -494,41 +536,49 @@ export async function httpRequest<T = any>(data_: {
   }
 
   // Merge Authorization header
-  const authHeaders = (token && authKey)
-  ?{Authorization:`Bearer ${((token||"") + "123456789"  + (authKey||"")) ||""}`}
-    // ? { Authorization: `Bearer ${token} `, ...headers }
-    : headers;
+  const authHeaders =
+    token && authKey
+      ? {
+          Authorization: `Bearer ${
+            (token || "") + "123456789" + (authKey || "") || ""
+          }`,
+        }
+      : // ? { Authorization: `Bearer ${token} `, ...headers }
+        headers;
 
   // ---- Axios request ----
   const config: AxiosRequestConfig = {
     url,
     method: method as any,
-    headers: {...authHeaders, "x-device-id":getDeviceId(),   "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",},
+    headers: {
+      ...authHeaders,
+      "x-device-id": getDeviceId(),
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
     params, // Axios handles params automatically
     data: body,
   };
-try{
+  try {
+    const response = await axios.request<T>(config);
 
-  const response = await axios.request<T>(config);
+    return response.data;
+  } catch (e) {
+    console.error(
+      e?.response?.data?.message || e?.message || "An error occured"
+    );
 
-  return response.data;
-}catch(e){
-
-console.error(e?.response?.data?.message||e?.message||"An error occured")
-
-  // throw(e)
-  return e?.response?.data||{success:false}
-  // process.kill(0)
-  
-}
+    // throw(e)
+    return e?.response?.data || { success: false };
+    // process.kill(0)
+  }
 }
 
 export const getchangeEnv = async (updatedenvs = []) => {
   const secretPhrase = sessionStore.getState().secretPhrase;
   const project = sessionStore.getState().project;
   const envs = envStore.getState().envs;
-  const omit = sessionStore.getState().config.omit ||[];
+  const omit = sessionStore.getState().config.omit || [];
   try {
     if (!secretPhrase) {
       return;
@@ -545,25 +595,35 @@ export const getchangeEnv = async (updatedenvs = []) => {
     const decriptedenvs_ = await Promise.all(
       updatedenvs.map(async (item) => {
         let c = handleDecryptEnv(item, deHashedKey);
-         const existing = envs.find((e) => e.title === c.title||(e?._id && e?._id==item?._id));
-         let obj = { ...item, ...c ,dItem:c,eItem:item  }
-         if(existing){
-          obj.pItem = existing
-         }
+        const existing = envs.find(
+          (e) => e.title === c.title || (e?._id && e?._id == item?._id)
+        );
+        let obj = { ...item, ...c, dItem: c, eItem: item };
+        if (existing) {
+          obj.pItem = existing;
+        }
 
-        return  obj;
+        return obj;
       })
     );
-  const  decriptedenvs = decriptedenvs_.filter((item) => !omit.includes(item.title))
+    const decriptedenvs = decriptedenvs_.filter(
+      (item) => !omit.includes(item.title)
+    );
 
     let v = decriptedenvs.reduce(
       (acc, env) => {
-        const existing = envs.find((e) => e.title === env.title ||(e?._id && e?._id==env?._id));
+        const existing = envs.find(
+          (e) => e.title === env.title || (e?._id && e?._id == env?._id)
+        );
 
-        if (!existing || existing.value !== env.value || existing.title!=env.title) {
+        if (
+          !existing ||
+          existing.value !== env.value ||
+          existing.title != env.title
+        ) {
           acc.changes.push(env);
         }
-  // let v = 
+        // let v =
         return acc;
       },
       {
@@ -590,7 +650,6 @@ export interface EnvItem {
  * @param envs array of {title, value}
  * @param filePath optional path to env file
  */
-
 
 // function customEnvUnique(c = [], envs = []) {
 //   const seen = new Set();
@@ -625,8 +684,6 @@ function customEnvUnique(c = [], envs = []) {
     const citemTitle = item?.dItem?.title;
     const title = item?.title;
 
-    
-
     const alreadyExists =
       (id && seenIds.has(id)) ||
       (ditemTitle && seenDitemTitles.has(ditemTitle)) ||
@@ -644,41 +701,51 @@ function customEnvUnique(c = [], envs = []) {
   return merged;
 }
 
-export const  getmetadata = ()=>{
+export const getmetadata = () => {
+  let project = sessionStore.getState().project;
 
-    let project =  sessionStore.getState().project
+  let proj = project.colab.project;
+  let metadata = [
+    // {title:"envVersion",value:proj.envVersion},
+    { title: "envName", value: proj.name },
+    { title: "envDescription", value: proj.description },
+    { title: "envProjectId", value: proj._id },
+  ];
 
-  let proj = project.colab.project
-      let metadata = [
-        {title:"envVersion",value:proj.envVersion},
-        {title:"envName",value:proj.name},
-        {title:"envDescription",value:proj.description},
-        {title:"envProjectId",value:proj._id},
-      ]
+  return metadata;
+};
+export const getbranchmetadata = () => {
+  let project = sessionStore.getState().project;
 
-      return metadata
+  let proj = project.colab.project;
+  let metadata = [
+    { title: "envVersion", value: proj.envVersion },
+    // {title:"envName",value:proj.name},
+    // {title:"envDescription",value:proj.description},
+    // {title:"envProjectId",value:proj._id},
+  ];
 
-}
+  return metadata;
+};
 export const writeEnvFile = async (
   envs: EnvItem[],
   filePath: string = path.resolve(process.cwd(), ".env")
 ): Promise<{ success: boolean; error?: string }> => {
   try {
+    sessionStore.getState().setWatcherActive(false);
 
-    
-    sessionStore.getState().setWatcherActive(false)
+    let write = sessionStore.getState().config.write;
+    let branch = sessionStore.getState().config.branch;
+    let envfile = sessionStore.getState().config.envfile;
 
-
-    let   write =  sessionStore.getState().config.write
-    // console.log(envs,write)
-    if(!write){
-      return
+    if (!write) {
+      return;
     }
     // Convert env objects to "KEY=VALUE" lines
     if (!fs.existsSync(filePath)) {
       console.warn(`⚠️  Env file not found at path: ${filePath}`);
     }
-let c = []
+    let c = [];
     // try{
 
     //   const content_ = fs.readFileSync(filePath, "utf8");
@@ -688,23 +755,49 @@ let c = []
     // }
     // let lines_ = _.uniqBy([...envs,...c],  (item) =>  item?._id)
     // let lines_ = customEnvUnique(envs,c)
-    let lines = _.uniqBy([...getmetadata(),...envs,...c],  (item) =>  item?.dItem?.title || item?.title
- ).map((env) => `${env.title}="${env.value}"`);
-        // lines = _.uniqBy([...lines, ...c.map((e) => `${e.title}=${e.value}`)], (line) => line.split("=")[0]);
+    let branchobj = _.uniqBy(
+      [...envs, ...c],
+      (item) => item?.dItem?.title || item?.title
+    );
+    //     let globalObj = _.uniqBy([...getmetadata(),...envs,...c],  (item) =>  item?.dItem?.title || item?.title
+    //  );
+
+    //  let branchobj = listToObject(linesobj)
+    // lines = _.uniqBy([...lines, ...c.map((e) => `${e.title}=${e.value}`)], (line) => line.split("=")[0]);
 
     // Join lines with newlines
-    const content = lines.join("\n");
+let data = listToObject([
+          ...getbranchmetadata(),
+          ...branchobj.filter((e) => !DEFAULTOMIT.includes(e.title)),
+        ])
+    let parser = await new XavrenParser();
+    parser.load();
+    parser.write({
+      writeObj: {
+        ...listToObject(getmetadata()),
+        [branch]:data ,
+      },
+      flags: "an",
+    });
 
-    // Write to file
-    await fs.promises.writeFile(filePath, content, { encoding: "utf8" });
+      parser.updateXavLock(data,envfile)
+    // let lines =linesobj .map((env) => `${env.title}="${env.value}"`)
+    // const content = lines.join("\n");
+
+    // // Write to file
+    // await fs.promises.writeFile(filePath, content, { encoding: "utf8" });
 
     return { success: true };
   } catch (err: any) {
     console.error("Error writing .env file:", err);
     return { success: false, error: err.message || String(err) };
-  }finally{
-     sessionStore.getState().setWatcherActive(true)
-
+  } finally {
+    await new Promise((res) => {
+      setTimeout(() => {
+        res(true);
+      }, 2000);
+    });
+    sessionStore.getState().setWatcherActive(true);
   }
 };
 
@@ -718,16 +811,60 @@ export const getenvObject = (envList) => {
 export const updateProcessEnv = (envList: EnvItem[]) => {
   if (!Array.isArray(envList)) return;
 
-  [...getmetadata(),...envList].forEach(({ title, value }) => {
+  [...getmetadata(), ...envList].forEach(({ title, value }) => {
     if (title) {
       process.env[title] = value;
     }
   });
 };
 
+export function objectToList(obj: Record<string, any>) {
+  return Object.entries(obj).map(([key, value]) => ({
+    title: key,
+    value: String(value), // ensure value is string
+  }));
+}
 
+export function listToObject(list: { title: string; value: string }[]) {
+  return list.reduce((acc, { title, value }) => {
+    acc[title] = value; // assign value to corresponding key
+    return acc;
+  }, {} as Record<string, string>);
+}
 
-export interface IConfig  {
+interface ILoadEnv {
+  branch?: string;
+  env?: string;
+}
+
+export const loadenv = (loadEnvData?: ILoadEnv) => {
+  try {
+    let env = loadEnvData?.env || ".env";
+    let branch = loadEnvData?.branch;
+
+    let parser = new XavrenParser();
+
+    parser.loadAndSpawn({ branch, env });
+
+    return parser;
+  } catch (e) {
+    console.warn(e?.message || "an error coccured with env parser");
+  }
+};
+
+export function pickStringValues(obj: Record<string, any>) {
+  const result: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === "string") {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+export interface IConfig {
   key: string;
   task?: string;
   // projectKey: string;
@@ -738,181 +875,209 @@ export interface IConfig  {
   sync?: boolean;
   write?: boolean;
   watch?: boolean;
-   omit?:string[];
-   updateCloud?:boolean
+  omit?: string[];
+  updateCloud?: boolean;
   onSync?: (data: ISyncData) => void;
   onLoad?: (data: any) => void;
 }
 
+export const upgradeVersion = async ({
+  colab,
+  secretPhrase,
+  force = false,
+}: {
+  colab?: any;
+  secretPhrase?: string;
+  force?: boolean;
+}) => {
+  try {
+    let savedProject = sessionStore.getState().project;
+    secretPhrase = secretPhrase || sessionStore.getState().secretPhrase;
 
-export const upgradeVersion = async ({colab,secretPhrase ,force=false}:{colab?:any,secretPhrase?:string,force?:boolean})=>{
-try{
-
-  
-  let savedProject =   sessionStore.getState().project
-   secretPhrase =  secretPhrase || sessionStore.getState().secretPhrase
-  //  console.log("upvers",force,colab.colab.keyVersion != colab.project.keyVersion,colab.colab.keyVersion , colab.project.keyVersion)
-   
-  //  console.log(colab)
-   if(force){
-  
-  let   proj =    await getProjectById({id:(colab||savedProject).project._id,versioncontrol:false})
-  colab = proj.data
-    }
-    // console.log(colab?.colab)
-    if(colab.colab.keyVersion != colab.project.keyVersion){
-  
-  // let key = colab.key
-
-let privateKey = await handleDecrypt({encrypted:colab.colab.privateKey,passphrase:secretPhrase})
-
-let decryptedKey = await decryptMessageFromKeyPair({encrypted:colab.colab.key,privateKey:privateKey})
-
-
-let version = colab.project.keyVersion
-let encryptedKey =  await handleEncrypt({
-  data:decryptedKey.decrypted,
-  passphrase:secretPhrase,
-  stringify:true
-})
-// console.log(encryptedKey,"encryptedKey")
-  
-  
-  
-  
-  
-  
-  
-  
-   let project =   await httpRequest({
-        url:UPGRADEVERSIONURL,
-      
-        body:{version,hashedkey:encryptedKey,id:colab.project._id},
-        method:"POST"
-  
-      })
-  
-  //  let project =    await getProjectById(colab.project._id)
-   if(project.success){
-    sessionStore.getState().setProject(project.data);
-  
-    // await getEnvs({project:colab.project._id,write:true})
-   }
-
-   return project
-  
-  
+    if (force) {
+      let proj = await getProjectById({
+        id: (colab || savedProject).project._id,
+        versioncontrol: false,
+      });
+      colab = proj.data;
     }
 
-}catch(e){
-  console.log(e)
-}
+    if (colab?.colab?.keyVersion != colab?.project?.keyVersion) {
+      // let key = colab.key
 
-}
-export const initialize = async (data_:IConfig)=>{
+      let privateKey = await handleDecrypt({
+        encrypted: colab.colab.privateKey,
+        passphrase: secretPhrase,
+      });
 
-let {
-  key:key__,
-  updateCloud=true,
-  task,
-  // projectKey,
-  env = ".env",
-  branch ,
-  commit,
-  commitId
-  ,
-  sync = false,
-  write = false,
-  watch = false,
-  onSync = () => {},
-   omit=[]
-} = data_
+      let decryptedKey = await decryptMessageFromKeyPair({
+        encrypted: colab.colab.key,
+        privateKey: privateKey,
+      });
 
-branch = branch || getCurrentBranch()
-let data =await  handleDecryptKeyPairLongData({encryptedString:key__,privateKey:PRIVATEKEY})
-let {projectId:project,userKey:secretPhrase,userEmail:email,projectKey:keyy,colabId}=data
+      let version = colab.project.keyVersion;
+      let encryptedKey = await handleEncrypt({
+        data: decryptedKey.decrypted,
+        passphrase: secretPhrase,
+        stringify: true,
+      });
+
+      let project = await httpRequest({
+        url: UPGRADEVERSIONURL,
+
+        body: { version, hashedkey: encryptedKey, id: colab.project._id },
+        method: "POST",
+      });
+
+      //  let project =    await getProjectById(colab.project._id)
+      if (project.success) {
+        sessionStore.getState().setProject(project.data);
+
+        // await getEnvs({project:colab.project._id,write:true})
+      }
+
+      return project;
+    }
+  } catch (e) {
+    console.log(e);
+  }
+};
+export const initialize = async (data_: IConfig) => {
+  let {
+    key: key__,
+    updateCloud = true,
+    task,
+    // projectKey,
+    env = ".env",
+    branch,
+    commit,
+    commitId,
+    sync = false,
+    write = false,
+    watch = false,
+    onSync = () => {},
+    omit = [],
+  } = data_;
+  loadenv({ branch, env });
+  branch = branch || getCurrentBranch();
+  let data = await handleDecryptKeyPairLongData({
+    encryptedString: key__,
+    privateKey: PRIVATEKEY,
+  });
+  let {
+    projectId: project,
+    userKey: secretPhrase,
+    userEmail: email,
+    projectKey: keyy,
+    colabId,
+  } = data;
   // const [secretPhrase, email] = authPhrase.split("_kk_");
   sessionStore.getState().setSecretPhrase(secretPhrase);
   sessionStore.getState().setEmail(email);
   sessionStore.getState().setProjectId(project);
   sessionStore.getState().setColabId(colabId);
- 
-  
-  // const [keyy, project] = projectKey.split("_kk_");
-// console.log("ddd",data)
-let logindata = await loginWithPhrase({phrase:secretPhrase,colabId,task})
 
-if(logindata?.action){
-  let action =logindata.action
-  switch(action){
-    case ACTIONS.KILL:{
-      console.log(logindata?.message||"process killed")
-      return logindata
+  let logindata = await loginWithPhrase({
+    phrase: secretPhrase,
+    colabId,
+    task,
+  });
+
+  if (logindata?.action) {
+    let action = logindata.action;
+    switch (action) {
+      case ACTIONS.KILL: {
+        console.log(logindata?.message || "process killed");
+        return logindata;
+      }
     }
   }
-}
-// console.log("ddddd")
 
-  let fetchproject = await getProjectById({id:project,task});
+  let fetchproject = await getProjectById({ id: project, task });
 
-  if(fetchproject.success){
+  if (fetchproject.success) {
     // console.log(fetchproject.data)
   }
   sessionStore.getState().setProject(fetchproject.data);
-  let commitInfo = getLatestGitCommit()
+  let commitInfo = getLatestGitCommit();
   sessionStore
     .getState()
-    .setConfig({ envfile: env,commit:commit||commitInfo?.message,commitId:commitId||commitInfo?.commitId, sync, onSync ,omit:[...omit,...DEFAULTOMIT],updateCloud,write,branch,projectKey:keyy});
-    setinitalEnv(key__)
-  
+    .setConfig({
+      envfile: env,
+      commit: commit || commitInfo?.message,
+      commitId: commitId
+        ? commitId == "unique"
+          ? crypto.randomBytes(16).toString("hex")
+          : commitId
+        : commitInfo?.commitId,
+      sync,
+      onSync,
+      omit: [...omit, ...DEFAULTOMIT],
+      updateCloud,
+      write,
+      branch,
+      projectKey: keyy,
+    });
+  setinitalEnv(key__);
 
+  return {
+    env,
+    sync,
+    onSync,
+    omit,
+    updateCloud,
+    write,
+    branch,
+    project,
+    secretPhrase,
+    email,
+    keyy,
+    fetchproject,
+    watch,
+  };
+};
 
-    return  {env,sync,onSync,omit,updateCloud,write,branch,project,secretPhrase,email,keyy,fetchproject,watch}
-}
+const readenv = () => {
+  let path = sessionStore.getState().config.envfile;
+  let branch = sessionStore.getState().config.branch;
+  // const content = fs.readFileSync(path, "utf8");
+  //   let c = parseAndUniqueEnv(content);
+  let parser = new XavrenParser();
 
-const readenv  =()=>{
-  let path = sessionStore.getState().config.envfile
-    const content = fs.readFileSync(path, "utf8");
-      let c = parseAndUniqueEnv(content);
-     
-return c
-}
+  parser.load(path);
 
-const setinitalEnv = (key)=>{
+  return objectToList(parser.get({ branch, standalone: true }) || []);
+};
 
-  try{
-    
-      let c = readenv()
-      let omit = sessionStore.getState().config.omit||[]
-      for (let val of c){
-        if(val.value==key){
-             omit.push(val.title)
-        }
+const setinitalEnv = (key) => {
+  try {
+    let c = readenv();
+
+    let omit = sessionStore.getState().config.omit || [];
+    for (let val of c) {
+      if (val.value == key) {
+        omit.push(val.title);
       }
+    }
 
-      sessionStore.getState().config.omit=omit
+    sessionStore.getState().config.omit = omit;
 
- 
+    envStore.getState().setEnvs(c);
+  } catch (e) {}
+};
 
-       envStore.getState().setEnvs(c)
-
-  }catch(e){
-
-  }
-}
-
-import { execSync } from 'child_process';
+import { execSync } from "child_process";
 
 function getCurrentBranch() {
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
-    return branch || 'main'; // fallback if output is empty
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      encoding: "utf8",
+    }).trim();
+    return branch || "main"; // fallback if output is empty
   } catch {
-    return 'main'; // fallback if git fails or not a repo
+    return "main"; // fallback if git fails or not a repo
   }
 }
-
-
 
 const DEVICE_ID_FILE = path.join(process.cwd(), ".device-id"); // hidden file in project root
 
@@ -933,14 +1098,16 @@ export function getDeviceId(): string {
       return fs.readFileSync(DEVICE_ID_FILE, "utf-8");
     } else {
       const deviceId = crypto.randomUUID();
-      fs.writeFileSync(DEVICE_ID_FILE, deviceId, { encoding: "utf-8", flag: "w" });
+      fs.writeFileSync(DEVICE_ID_FILE, deviceId, {
+        encoding: "utf-8",
+        flag: "w",
+      });
       return deviceId;
     }
   }
 
   throw new Error("Cannot generate device ID in this environment");
 }
-
 
 import readline from "readline";
 
@@ -985,7 +1152,9 @@ export class TerminalLoader {
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);
     process.stdout.write(
-      `${statusMsg} ${this.spinnerChars[this.spinnerIndex % this.spinnerChars.length]} [${filled}>${empty}] ${percentage}% | ⏱ ${elapsed.toFixed(1)}s`
+      `${statusMsg} ${
+        this.spinnerChars[this.spinnerIndex % this.spinnerChars.length]
+      } [${filled}>${empty}] ${percentage}% | ⏱ ${elapsed.toFixed(1)}s`
     );
 
     if (this.current >= this.total) {
@@ -1005,11 +1174,15 @@ export class TerminalLoader {
   }
 }
 
-
-
 import os from "os";
+import { XavrenParser } from "./parser";
 
-export const DEFAULTOMIT = ["envVersion","envName","envDescription","envProjectId"]
+export const DEFAULTOMIT = [
+  "envVersion",
+  "envName",
+  "envDescription",
+  "envProjectId",
+];
 
 export function getOrCreateConfig(updates = {}) {
   const configDir = path.join(os.homedir(), ".config", "myapp");
@@ -1055,19 +1228,15 @@ export function getOrCreateConfig(updates = {}) {
 export function getLatestGitCommit() {
   try {
     // Get the latest commit hash
-    const commitId = execSync("git rev-parse HEAD")
-      .toString()
-      .trim();
+    const commitId = execSync("git rev-parse HEAD").toString().trim();
 
     // Get the latest commit messagef
-    const message = execSync("git log -1 --pretty=%B")
-      .toString()
-      .trim();
+    const message = execSync("git log -1 --pretty=%B").toString().trim();
 
     return { commitId, message };
   } catch (err) {
     // If any error occurs (not a git repo, etc.)
-    return {commitId:null,message:null};
+    return { commitId: null, message: null };
   }
 }
 

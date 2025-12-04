@@ -63,6 +63,12 @@ export async function handleEncrypt({ data: text, passphrase: secretPhrase, stri
 export function deriveKey(passphrase: string, salt: Buffer) {
   return crypto.scryptSync(passphrase, salt, 32);
 }
+
+
+export function deriveKeyString(passphrase: string, salt: string): Buffer {
+  const saltBytes = Buffer.from(salt, "utf8");
+  return crypto.scryptSync(passphrase, saltBytes, 32);
+}
 export function handleEncryptEnv({
   data: obj,
   passphrase: secretPhrase,
@@ -80,6 +86,8 @@ export function handleEncryptEnv({
   const title = obj.title;
   const value = obj.value;
 
+  const headhash = deriveKeyString(secretPhrase,title).toString("hex")
+  const hash = deriveKeyString(secretPhrase,title+value).toString("hex")
   // Generate random IV for each field
   const iv1 = crypto.randomBytes(12);
   const iv2 = crypto.randomBytes(12);
@@ -108,6 +116,8 @@ export function handleEncryptEnv({
     ivValue: iv2.toString("hex"),
     authTagTitle: authTag1.toString("hex"),
     authTagValue: authTag2.toString("hex"),
+    headhash,
+    hash,
     // _id:obj?.item?._id
   };
 }
@@ -281,4 +291,12 @@ export async function handleDecryptKeyPairLongData({ encryptedString, privateKey
   } catch {
     return decoded;
   }
+}
+
+
+export function hashWithKey(key: string, message: string): string {
+  return crypto
+    .createHmac("sha256", key)
+    .update(message)
+    .digest("hex");
 }

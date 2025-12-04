@@ -1,0 +1,21 @@
+project="Real estate api"
+
+[globals]
+jwt="seluhsdjflksbdjfvallckjsdkudzbcsjkdnfvz"
+NODENV="false"
+@end
+
+[main]
+NUBAN_IDf={project}
+dddd="globals"
+@end
+
+[maineeeedddde]
+sdsd="SDs"
+gggg="kmmk"
+inherit={main}
+@end
+
+[maineeeee]
+inherit={maineeeedddde}
+@end
