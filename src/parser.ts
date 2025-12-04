@@ -239,6 +239,7 @@ export class XavrenParser {
    * flags: a=append, r=rewrite, o=old first, n=new first
    */
   write({ writeObj, configPath = '.env', flags = 'r' }) {
+    // console.log(writeObj)
     try {
       const fullPath = path.isAbsolute(configPath) 
         ? configPath 
@@ -272,7 +273,7 @@ export class XavrenParser {
           finalData = this.mergeDeep(writeObj,existingData);
         }
       }
-   
+  //  console.log(finalData)
       finalData = this.rerefrence({data:finalData})
     
       // Build content string
@@ -343,7 +344,8 @@ export class XavrenParser {
       }
 
       // Handle sections (strip hyphen for internal storage)
-      const sectionMatch = line.match(/^\[(-?)([\w.]+)\]$/);
+      // const sectionMatch = line.match(/^\[(-?)([\w.]+)\]$/);
+       const sectionMatch = line.match(/^\[(-?)([A-Za-z0-9_\-!#$%&()+=\/.,@{}]+)\]$/);
       if (sectionMatch) {
         if (currentSection && !sectionBraced) {
           result[currentSection] = currentData;
@@ -563,7 +565,8 @@ return realdata
       if (line === '{' || line === '}' || line==="@end" ||line==="---") continue;
 
       // Handle sections (preserves the bracketed format with hyphens)
-      const sectionMatch = line.match(/^\[(-?[\w.]+)\]$/);
+      const sectionMatch = line.match(/^\[(-?[A-Za-z0-9_\-!#$%&()+=\/.,@{}]+)\]$/);
+      // const sectionMatch = line.match(/^\[(-?[\w.]+)\]$/);
       if (sectionMatch) {
         currentSection = sectionMatch[1];
         result[currentSection] = {};
@@ -660,7 +663,8 @@ return realdata
       }
 
       // Handle sections (including dots in section names, with optional hyphen prefix)
-      const sectionMatch = line.match(/^\[(-?)([\w.]+)\]$/);
+      // const sectionMatch = line.match(/^\[(-?)([\w.]+)\]$/);
+ const sectionMatch = line.match(/^\[(-?)([A-Za-z0-9_\-!#$%&()+=\/.,@{}]+)\]$/);;
       if (sectionMatch) {
         if (currentSection) {
           result[currentSection] = this.resolveValues(
@@ -821,12 +825,13 @@ updateXavLock(obj: Record<string, string>,env) {
 
     this.load(env)
   }
-
+// console.log("Updating XavLock with:", obj);
+// return
   
   const formerLock = this._configData["xavlock"] || {};
   // console.log(formerLock)
   const entries = Object.entries(obj);
-console.log(entries)
+// console.log(entries)
   for (const [key, value] of entries) {
     
     // Check if already locked: key ends with @lock(...)
@@ -839,7 +844,8 @@ console.log(entries)
 
     // Not locked → lock it
     // console.log("Locking key:", value);
-    const safeValue = value?.toString()?.replaceAll("=", "_");
+    // const safeValue = value.toString();
+    const safeValue = value?.toString()?.replaceAll("=", "");
     const newKey = `${key}@lock(${safeValue})`;
 
     formerLock[newKey] = value;
