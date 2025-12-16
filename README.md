@@ -1,6 +1,5 @@
 
 
-````markdown
 # Xavrem Documentation
 
 Secure environment variable management with real-time synchronization and zero-knowledge encryption.
