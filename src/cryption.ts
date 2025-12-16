@@ -160,18 +160,6 @@ export function handleDecryptEnv(
   return {
     title: decryptedTitle.toString(),
     value: decryptedValue.toString(),
-
-    //     item:{
-
-    //     title,
-    //   value,
-    //   salt,
-    //   ivTitle,
-    //   ivValue,
-    //   authTagTitle,
-    //   authTagValue,
-
-    // }
   };
 }
 
@@ -197,53 +185,6 @@ privateKey:privateKeyPem=process.env.BODYPRIVATEKEY
 
 
 
-// /**
-//  * Decrypts a long data payload that was encrypted using RSA + AES-GCM hybrid encryption.
-//  * @param {Object} params
-//  * @param {string} params.encryptedString - The base64 string containing RSA-encrypted AES key + IV + ciphertext.
-//  * @param {string} params.privateKey - The PEM-formatted RSA private key.
-//  * @returns {Promise<any>} - The decrypted data (parsed JSON or plain text).
-//  */
-// export async function handleDecryptKeyPairLongData({ encryptedString, privateKey }) {
-//   // Decode base64 into bytes
-//   const encryptedBytes = Buffer.from(encryptedString, "base64");
-
-//   // Typical 2048-bit RSA key => 256 bytes for encrypted AES key
-//   const rsaKeySize = 256;
-
-//   const encryptedAesKey = encryptedBytes.slice(0, rsaKeySize);
-//   const iv = encryptedBytes.slice(rsaKeySize, rsaKeySize + 12);
-//   const ciphertext = encryptedBytes.slice(rsaKeySize + 12);
-
-//   // Decrypt AES key using RSA private key
-//   const rawAesKey = crypto.privateDecrypt(
-//     {
-//       key: privateKey,
-//       padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-//       oaepHash: "sha256", // match whatever was used during encryption
-//     },
-//     encryptedAesKey
-//   );
-
-//   // Decrypt ciphertext using AES-GCM
-//   const decipher = crypto.createDecipheriv("aes-256-gcm", rawAesKey, iv);
-
-//   // Some AES-GCM implementations append an auth tag; if yours does, extract last 16 bytes as tag:
-//   // const tag = ciphertext.slice(-16);
-//   // const data = ciphertext.slice(0, -16);
-//   // decipher.setAuthTag(tag);
-
-//   let decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-
-//   const decoded = decrypted.toString("utf8");
-//   try {
-//     return JSON.parse(decoded);
-//   } catch {
-//     return decoded;
-//   }
-// }
-
-// import crypto from "crypto";
 
 /**
  * Decrypts RSA + AES-GCM encrypted data.

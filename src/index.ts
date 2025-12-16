@@ -6,7 +6,7 @@ import { getenvObject, getEnvs, IConfig, initialize } from "./utils";
 
 import { envStore, sessionStore } from "./state";
 import { SocketClient } from "./websocket";
-
+//deprecated
 function watchEnv({
   filePath = ".env",
   onChange,

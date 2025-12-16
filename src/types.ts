@@ -35,5 +35,24 @@ export type EnvStore = {
   getEnv: (index: number) => EnvItem | null;
 };
 
+
+
+export interface env{
+  title:string
+  value:string
+}
+
+export interface encryptedenv extends env{
+
+   ivTitle:string
+  ivValue:string
+   authTagTitle:string
+  authTagValue:string
+  hashhead?:string
+  hash?:string
+  salt:string
+
+}
+
  export type ISyncData = { list: EnvItem[]; changes: Record<string,string> };
 
