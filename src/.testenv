@@ -12,8 +12,8 @@ dddd="globals"
 
 [maineeeedddde]
 sdsd="SDs"
-gggg="kmmk"
-inherit={main}
+gggg={dddd}
+inherit={main.dddd}
 @end
 
 [maineeeee]
